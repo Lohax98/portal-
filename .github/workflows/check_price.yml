@@ -1,0 +1,42 @@
+name: Check Portal Price
+
+on:
+  schedule:
+    # UTC 1:00 = 北京时间 9:00, daily
+    - cron: "0 1 * * *"
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Check prices
+        id: check
+        run: python portal_monitor.py
+
+      - name: Commit price state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add price_state.json
+          git diff --cached --quiet || (git commit -m "📊 Update price state [$(date -u +'%Y-%m-%d')]" && git push)
+
+      - name: Create alert issue
+        if: hashFiles('alert.md') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "🎮 Portal 系列降价提醒！" \
+            --body-file alert.md \
+            --label "price-drop"
